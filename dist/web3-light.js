@@ -4036,6 +4036,38 @@ SolidityFunction.prototype.call = function () {
 };
 
 /**
+ * Traces a contract function.
+ *
+ * @method vmTrace
+ * @param {...Object} Contract function arguments
+ * @param {function} If the last argument is a function, the contract function
+ *   call will be asynchronous, and the callback will be passed the
+ *   error and result.
+ * @return {Object} the trace
+ */
+SolidityFunction.prototype.vmTrace = function () {
+    var args = Array.prototype.slice.call(arguments).filter(function (a) {return a !== undefined; });
+    var callback = this.extractCallback(args);
+    var defaultBlock = this.extractDefaultBlock(args);
+    var payload = this.toPayload(args);
+
+    var outputProcessor = function(o) {
+    	// Maybe do some processing eventually?
+    	return o;
+    }
+
+    if (!callback) {
+        var output = this._eth.vmTraceCall(payload, defaultBlock);
+        return outputProcessor(output);
+    } 
+        
+    var self = this;
+    this._eth.vmTraceCall(payload, defaultBlock, function (error, output) {
+        callback(error, outputProcessor(output));
+    });
+};
+
+/**
  * Should be used to sendTransaction to solidity function
  *
  * @method sendTransaction
@@ -4150,6 +4182,7 @@ SolidityFunction.prototype.attachToContract = function (contract) {
     execute.request = this.request.bind(this);
     execute.call = this.call.bind(this);
     execute.sendTransaction = this.sendTransaction.bind(this);
+    execute.vmTrace = this.vmTrace.bind(this);
     execute.estimateGas = this.estimateGas.bind(this);
     execute.getData = this.getData.bind(this);
     var displayName = this.displayName();
@@ -5295,6 +5328,13 @@ var methods = function () {
         inputFormatter: [formatters.inputCallFormatter, formatters.inputDefaultBlockNumberFormatter]
     });
 
+    var vmTraceCall = new Method({
+        name: 'vmTraceCall',
+        call: 'ethcore_vmTraceCall',
+        params: 1,
+        inputFormatter: [formatters.inputCallFormatter]
+    });
+
     var estimateGas = new Method({
         name: 'estimateGas',
         call: 'eth_estimateGas',
@@ -5347,6 +5387,7 @@ var methods = function () {
         getTransactionReceipt,
         getTransactionCount,
         call,
+        vmTraceCall,
         estimateGas,
         sendRawTransaction,
         sendTransaction,
@@ -8377,7 +8418,8 @@ module.exports = transfer;
 	                if (i % 4) {
 	                    var bits1 = map.indexOf(base64Str.charAt(i - 1)) << ((i % 4) * 2);
 	                    var bits2 = map.indexOf(base64Str.charAt(i)) >>> (6 - (i % 4) * 2);
-	                    words[nBytes >>> 2] |= (bits1 | bits2) << (24 - (nBytes % 4) * 8);
+	                    var bitsCombined = bits1 | bits2;
+	                    words[nBytes >>> 2] |= (bitsCombined) << (24 - (nBytes % 4) * 8);
 	                    nBytes++;
 	                }
 	            }
